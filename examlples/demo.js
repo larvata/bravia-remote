@@ -1,4 +1,4 @@
-import Bravia from './';
+import Bravia from '../lib';
 // import net from 'net';
 // import dgram from 'dgram';
 // import buffer from 'buffer';
