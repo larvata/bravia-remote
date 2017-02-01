@@ -1,6 +1,6 @@
 {
   "name": "bravia-remote",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "",
   "main": "lib/index.js",
   "bin": {
@@ -10,6 +10,10 @@
     "bin/",
     "lib/"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:larvata/bravia-remote.git"
+  },
   "scripts": {
     "start": "babel src -d . && node build",
     "test": "echo \"Error: no test specified\" && exit 1",
