@@ -4,6 +4,10 @@ A library/CLI for control your sony bravia device.
 ## Use as Command line tools
 
 ```
+npm install -g bravia-remote
+```
+
+```
   Usage: bravia [options]
 
   Options:
@@ -28,6 +32,10 @@ A library/CLI for control your sony bravia device.
 
 
 ## Use as library
+
+```
+npm install --save bravia-remote
+```
 
 ```
 import Bravia from 'bravia-remote';
