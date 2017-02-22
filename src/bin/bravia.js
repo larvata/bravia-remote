@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
+import fs from 'fs';
+import readline from 'readline';
 import Bravia from '../lib';
 import program from 'commander';
 import pkg from '../package.json';
 
 const version = pkg.version || '0.0.0';
+
+const verboseLog = function(){
+  if (!program.verbose) {
+    return;
+  }
+  console.log.apply(null, arguments);
+};
 
 const list = (val) => {
   return val.split(',');
@@ -96,24 +105,52 @@ const parseCommands = (bravia) => {
       available: false,
     });
   }
+  verboseLog('parsed commands:', commandList);
   return commandList;
 };
 
 program
   .version(version)
-  .option('-i', 'Interaction mode')
+  // .option('-i', 'Interaction mode')
   .option('-s, --server <ipaddr>', 'tv ip address')
   .option('-c, --commands <commands>', 'remote commands', list)
   .option('-k, --pskkey <psk>', 'PSK key')
   .option('-l, --list-device-info', 'device infomation')
+  .option('-v, --verbose', 'verbose mode')
   .parse(process.argv);
+
+
+if (program.rawArgs.length <= 2) {
+  // start bravia-remote without any argument
+  // display help information and exit
+  program.help();
+  process.exit();
+}
+
+// load user profile
+const userProfilePath = `${process.env.HOME}/.braviarc.json`;
+let userProfile = {};
+if (fs.existsSync(userProfilePath)) {
+  try {
+    userProfile = require(userProfilePath);
+  }
+  catch (e) {
+    console.error(e);
+    process.exit(1);
+  }
+}
+
+if (userProfile && !program.server && !program.pskkey) {
+  const { server, pskkey } = userProfile.default;
+  program.server = server;
+  program.pskkey = pskkey;
+  verboseLog('Device Server was not provided, load the server config stored in the .rc file.');
+}
+
 
 const checkParamsResult = checkParams(program);
 if (checkParamsResult.error) {
-  console.log(checkParamsResult.error);
-  console.log('  Example: ');
-  console.log('    bravia -s 192.168.0.111 -k 8888 -c "VolumeUp"');
-  program.help();
+  console.error('  error: ', checkParamsResult.error);
   process.exit(1);
 }
 
@@ -127,17 +164,19 @@ if (program.listDeviceInfo) {
       const availableInputSource = inputSource.map(s => `${s.label || '<NONAME>'}(${s.title})`);
       const availableCommands = controllerInfo.commands.map(c => c.name);
 
-      console.log('Available Input Source:');
-      console.log(availableInputSource.join(', \n'));
-      console.log('');
-      console.log('Available Commands:');
-      console.log(availableCommands.join(', '));
-      console.log('');
-      console.log('Device Info');
-      console.log(JSON.stringify(systemInfo, null, 2));
+      const commandOutput = [];
+      commandOutput.push('Available Input Source:');
+      commandOutput.push(availableInputSource.join(', \n'));
+      commandOutput.push('');
+      commandOutput.push('Available Commands:');
+      commandOutput.push(availableCommands.join(', '));
+      commandOutput.push('');
+      commandOutput.push('Device Info');
+      commandOutput.push(JSON.stringify(systemInfo, null, 2));
+      console.log(commandOutput.join('\n'));
     })
     .catch((err) => {
-      console.log(err);
+      console.error(err);
     });
 }
 else if (program.commands) {
@@ -147,10 +186,41 @@ else if (program.commands) {
       return bravia.executeCommands(cmds);
     })
     .then(() => {
-      console.log('command successed');
+      console.log('Command successed.\n');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      if (userProfile
+        && userProfile.default.server === program.server
+        && userProfile.default.pskkey === program.pskkey) {
+        // known server, just exit
+        process.exit(0);
+      }
+
+      const question = `This is the first time you connect to ${program.server}, \ndo you want to save the server-ip and psk-key for next use? (y/n) `;
+      process.stdout.write(question);
+      rl.on('line', (answer) => {
+        if (answer.toLowerCase() === 'y') {
+          userProfile = userProfile || {};
+          userProfile.default = userProfile.default || {};
+          userProfile.default = {
+            server: program.server,
+            pskkey: program.pskkey,
+          };
+          fs.writeFileSync(userProfilePath, JSON.stringify(userProfile, null, 2));
+          console.log('write profile done.');
+        }
+        rl.close();
+        process.exit(0);
+      });
     })
+    // .then(() => {
+
+    // })
     .catch((err) => {
-      console.log(err);
+      console.error(err);
     });
 }
 else {

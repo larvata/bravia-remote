@@ -46,9 +46,6 @@ export default class Bravia{
         this.deviceInfo.systemInfo = res.body.result[0];
         return Promise.resolve();
       })
-      .catch((err) => {
-        console.log(err);
-      });
   }
 
   _getInputSource() {
@@ -173,7 +170,8 @@ export default class Bravia{
       ].map(p => p.apply(this)))
       .then(() => Promise.resolve(this.deviceInfo))
       .catch((err) => {
-        throw err;
+        const errorMessage = `Error: Failed to Connect Device: ${err}\nPlease ensure your device is switched on and try again.`;
+        throw errorMessage;
       });
   }
 
