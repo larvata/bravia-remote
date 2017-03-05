@@ -5,6 +5,7 @@ module.exports = {
         "react"
     ],
     "rules": {
-      "consistent-return": 0
+      "consistent-return": 0,
+      "brace-style": 0
     }
 };

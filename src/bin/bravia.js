@@ -8,6 +8,41 @@ import pkg from '../package.json';
 
 const version = pkg.version || '0.0.0';
 
+
+const questionPromise = (question) => {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve, reject) => {
+    process.stdout.write(question);
+    rl.on('line', (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+};
+
+const saveUserProfile = (userProfile) => {
+  const userProfilePath = `${process.env.HOME}/.braviarc.json`;
+  fs.writeFileSync(userProfilePath, JSON.stringify(userProfile, null, 2));
+};
+
+const loadUserProfile = () => {
+  const userProfilePath = `${process.env.HOME}/.braviarc.json`;
+  let userProfile;
+
+  if (fs.existsSync(userProfilePath)) {
+    try {
+      userProfile = require(userProfilePath);
+    }
+    catch (e) {
+      console.error(e);
+    }
+  }
+  return userProfile;
+};
+
 const verboseLog = function(){
   if (!program.verbose) {
     return;
@@ -31,6 +66,7 @@ const checkParams = () => {
 
   if (!program.pskkey) {
     result.error = 'PSK key is missing';
+    return result;
   }
 
   return result;
@@ -49,10 +85,16 @@ const tryGetRemoteControlCommand = (bravia, cmd) => {
 };
 
 const tryGetDirectCommand = (bravia, cmd) => {
-  const directCommands = [{
+  const directCommands = [
+  {
     name: 'setInputSource',
     func: bravia.setInputSource,
-  }];
+  },
+  {
+    name: 'getPowerStatus',
+    func: bravia.getPowerStatus,
+  }
+  ];
 
   const result = {
     name: null,
@@ -68,7 +110,7 @@ const tryGetDirectCommand = (bravia, cmd) => {
 
   const funcName = matchs[1];
   const args = matchs[2].split(',');
-  const directCommand = directCommands.find(dc=> dc.name === funcName);
+  const directCommand = directCommands.find(dc => dc.name === funcName);
 
   if (!directCommand) {
     return null;
@@ -112,6 +154,7 @@ const parseCommands = (bravia) => {
 program
   .version(version)
   // .option('-i', 'Interaction mode')
+  .option('-i, --init', 'init device configuration')
   .option('-s, --server <ipaddr>', 'tv ip address')
   .option('-c, --commands <commands>', 'remote commands', list)
   .option('-k, --pskkey <psk>', 'PSK key')
@@ -128,16 +171,9 @@ if (program.rawArgs.length <= 2) {
 }
 
 // load user profile
-const userProfilePath = `${process.env.HOME}/.braviarc.json`;
-let userProfile = {};
-if (fs.existsSync(userProfilePath)) {
-  try {
-    userProfile = require(userProfilePath);
-  }
-  catch (e) {
-    console.error(e);
-    process.exit(1);
-  }
+const userProfile = loadUserProfile();
+if (!userProfile) {
+  process.exit(1);
 }
 
 if (userProfile && !program.server && !program.pskkey) {
@@ -157,23 +193,44 @@ if (checkParamsResult.error) {
 const { server, pskkey } = program;
 const bravia = new Bravia(server, pskkey);
 
-if (program.listDeviceInfo) {
+if (program.init) {
+  const prompts = `Please ensure all your bravia device are switched on
+  and press ENTER key to start search.`;
+  questionPromise(prompts)
+    .then(() => bravia.discoveryDevices(1000))
+    .then((devices) => {
+      // save configurated devices
+      userProfile.devices = Object.assign({}, devices, { default: false, pskkey: '', alias: '' });
+      saveUserProfile(userProfile);
+
+      const output = [];
+      output.push('Following devices are saved:');
+      devices.forEach((d) => output.push(`    ${d.model}/${d.ip}`));
+      output.push('You can edit the ~/.braviarc.json \nto set the pskkey and alias for your devices.');
+      console.log(output.join('\n'));
+      process.exit(0);
+    })
+    .catch((e) => {
+      console.log('error', e);
+    });
+}
+else if (program.listDeviceInfo) {
   bravia.connect()
     .then((deviceInfo) => {
       const { inputSource, systemInfo, controllerInfo } = deviceInfo;
       const availableInputSource = inputSource.map(s => `${s.label || '<NONAME>'}(${s.title})`);
       const availableCommands = controllerInfo.commands.map(c => c.name);
 
-      const commandOutput = [];
-      commandOutput.push('Available Input Source:');
-      commandOutput.push(availableInputSource.join(', \n'));
-      commandOutput.push('');
-      commandOutput.push('Available Commands:');
-      commandOutput.push(availableCommands.join(', '));
-      commandOutput.push('');
-      commandOutput.push('Device Info');
-      commandOutput.push(JSON.stringify(systemInfo, null, 2));
-      console.log(commandOutput.join('\n'));
+      const output = [];
+      output.push('Available Input Source:');
+      output.push(availableInputSource.join(', \n'));
+      output.push('');
+      output.push('Available Commands:');
+      output.push(availableCommands.join(', '));
+      output.push('');
+      output.push('Device Info');
+      output.push(JSON.stringify(systemInfo, null, 2));
+      console.log(output.join('\n'));
     })
     .catch((err) => {
       console.error(err);
@@ -182,15 +239,13 @@ if (program.listDeviceInfo) {
 else if (program.commands) {
   bravia.connect()
     .then(() => {
+      // console.log('connect done');
       const cmds = parseCommands(bravia);
       return bravia.executeCommands(cmds);
     })
-    .then(() => {
+    .then((result) => {
+      console.log(result);
       console.log('Command successed.\n');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
 
       if (userProfile
         && userProfile.default.server === program.server
@@ -199,26 +254,23 @@ else if (program.commands) {
         process.exit(0);
       }
 
-      const question = `This is the first time you connect to ${program.server}, \ndo you want to save the server-ip and psk-key for next use? (y/n) `;
-      process.stdout.write(question);
-      rl.on('line', (answer) => {
-        if (answer.toLowerCase() === 'y') {
-          userProfile = userProfile || {};
-          userProfile.default = userProfile.default || {};
-          userProfile.default = {
-            server: program.server,
-            pskkey: program.pskkey,
-          };
-          fs.writeFileSync(userProfilePath, JSON.stringify(userProfile, null, 2));
-          console.log('write profile done.');
-        }
-        rl.close();
-        process.exit(0);
-      });
+      const question =
+        `This is the first time you connect to ${program.server},
+        do you want to save the server-ip and psk-key for next use? (y/n) `;
+      return questionPromise(question);
     })
-    // .then(() => {
-
-    // })
+    .then((answer) => {
+      if (answer.toLowerCase() === 'y') {
+        userProfile.default = userProfile.default || {};
+        userProfile.default = {
+          server: program.server,
+          pskkey: program.pskkey,
+        };
+        saveUserProfile(userProfile);
+        console.log('write profile done.');
+      }
+      process.exit(0);
+    })
     .catch((err) => {
       console.error(err);
     });

@@ -39,6 +39,7 @@
   "dependencies": {
     "babel-runtime": "^6.22.0",
     "commander": "^2.9.0",
+    "node-ssdp": "^3.2.0",
     "popsicle": "^9.0.0"
   }
 }

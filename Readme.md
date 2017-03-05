@@ -1,7 +1,10 @@
 # bravia-remote
 A library/CLI for control your sony bravia device.
 
-## Use as Command line tools
+[![npm version](https://badge.fury.io/js/bravia-remote.svg)](https://badge.fury.io/js/bravia-remote)
+
+
+## Use as Command Line Tools
 
 ```
 npm install -g bravia-remote
@@ -12,14 +15,13 @@ npm install -g bravia-remote
 
   Options:
 
-    -h, --help                 output usage information  
-    -V, --version              output the version number 
-    -i                         Interaction mode
+    -h, --help                 output usage information
+    -V, --version              output the version number
     -s, --server <ipaddr>      tv ip address
     -c, --commands <commands>  remote commands
     -k, --pskkey <psk>         PSK key
-    -l, --list-device-info     device infomation 
-
+    -l, --list-device-info     device infomation
+    -v, --verbose              verbose mode
 
   Examples: 
     # get device status
@@ -31,7 +33,7 @@ npm install -g bravia-remote
 ```
 
 
-## Use as library
+## Use as Library
 
 ```
 npm install --save bravia-remote
